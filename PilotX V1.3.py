@@ -31,7 +31,7 @@ GRBL_BUFFER_MAX = 16      # GRBL 1.2h planner buffer (safe)
 class CNCSenderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Pilot CNC V1.3")
+        self.root.title("Pilot X V1.3")
         self.root.geometry("1280x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
@@ -170,14 +170,14 @@ class CNCSenderApp:
 # -------------------LOGO Function--------------------------------------
     def show_logo_window(self):
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(script_dir, "images", "Pilot CNC Logo.png")
+        logo_path = os.path.join(script_dir, "images", "PilotX Logo.png")
 
         if os.path.exists(logo_path):
             logo_image = Image.open(logo_path)
             self.logo_photo = ImageTk.PhotoImage(logo_image)
 
             logo_window = tk.Toplevel(self.root)
-            logo_window.title("PilotCNC Logo")
+            logo_window.title("PilotX Logo")
             logo_window.geometry(f"{logo_image.width}x{logo_image.height}")
             logo_window.resizable(False, False)
 
@@ -384,7 +384,7 @@ class CNCSenderApp:
 
         # Load the logo
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(script_dir, "images", "Pilot CNC Logo2.png")
+        logo_path = os.path.join(script_dir, "images", "PilotX Logo2.png")
         logo_img_raw = Image.open(logo_path)
         logo_img_raw = logo_img_raw.resize((150, 150))  # optional resize
         logo_img = ImageTk.PhotoImage(logo_img_raw)
