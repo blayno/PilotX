@@ -694,9 +694,11 @@ class CNCSenderApp:
     #------------------- Autolevel Ready Functions---------------------------------------
     def AutolevelReady(self):
                 # Probe ready for Autolevel
+        self._log(f"Probe Surface")
         self._send_line(f"G38.2 Z-5 F50")
         self._wait_for_ok(2.0)
         
+        self._log(f"WCS = XYZ0")
         self._send_line(f"G10 L20 P1 X0 Y0 Z0")
         self._wait_for_ok(2.0)
                                             
