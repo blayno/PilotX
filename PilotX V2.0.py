@@ -31,13 +31,14 @@ GRBL_BUFFER_MAX = 16      # GRBL 1.2h planner buffer (safe)
 class CNCSenderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Pilot X V1.9")
+        self.root.title("Pilot X V2.0")
         self.root.geometry("1280x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
         self.root.after(300, self.show_logo_window)
         
-        
+        #Simulation/gcode sneding speed-------------------------
+        self.update_interval = 20
         
         
         #Load Json File For Previous Settings
@@ -224,13 +225,13 @@ class CNCSenderApp:
     # ------------------------- Build UI -------------------------
     def _build_ui(self):
         # Notebook: Sender tab + Auto-Level tab
-        nb = ttk.Notebook(self.root)
-        nb.pack(fill='both', expand=True, padx=6, pady=6)
+        self.nb = ttk.Notebook(self.root)
+        self.nb.pack(fill='both', expand=True, padx=6, pady=6)
         
 
         # --- Sender Tab ---
-        sender_frame = ttk.Frame(nb, padding=8)
-        nb.add(sender_frame, text="Sender")
+        sender_frame = ttk.Frame(self.nb, padding=8)
+        self.nb.add(sender_frame, text="Sender")
 
         f = ttk.Frame(sender_frame, padding=4)
         f.pack(fill='both', expand=True)
@@ -459,16 +460,16 @@ class CNCSenderApp:
 
         
         #----- Macro Tab ----
-        macro_tab = ttk.Frame(nb, padding=8)
-        nb.add(macro_tab, text='Macros')
+        macro_tab = ttk.Frame(self.nb, padding=8)
+        self.nb.add(macro_tab, text='Macros')
         
         #----- Probe Tab ----
-        probe_tab = ttk.Frame(nb, padding=8)
-        nb.add(probe_tab, text='Probe')
+        probe_tab = ttk.Frame(self.nb, padding=8)
+        self.nb.add(probe_tab, text='Probe')
         
         # --- Auto-Level Tab ---
-        al_frame = ttk.Frame(nb, padding=8)
-        nb.add(al_frame, text="Auto-Level")
+        al_frame = ttk.Frame(self.nb, padding=8)
+        self.nb.add(al_frame, text="Auto-Level")
   
 
         self._build_macro_ui(macro_tab)
@@ -782,6 +783,19 @@ class CNCSenderApp:
         style.configure("Red.TButton", foreground="red")
         ttk.Button(ss_frame,text="E Stop/Sft Rst",style="Red.TButton",command=lambda: self.send_realtime(b"\x18")).grid(row=0, column=1,padx=6, pady=10)
 
+#------------------- Disable Tabs Function--------------------------------------
+    def set_tabs_state(self, state='normal'):
+        """
+        Enable or disable all tabs in the notebook.
+        state: 'normal' or 'disabled'
+        Sender tab (index 0) will always remain enabled.
+        """
+        for i in range(self.nb.index('end')):  # iterate all tabs
+            if i == 0:
+                self.nb.tab(i, state='normal')  # keep sender tab enabled
+            else:
+                self.nb.tab(i, state=state)
+
 
 
 # ------------------ estop function ----------------------------------------------
@@ -800,6 +814,9 @@ class CNCSenderApp:
         self.status_var.set("Stopped")
         self.current_line_index = 0
         self.pending_lines.clear()
+        
+            # Re-enable tabs
+        self.set_tabs_state('normal')
         try:
             self.progress['value'] = 0
             self.current_label.config(text="Line: 0 / 0")
@@ -1697,6 +1714,9 @@ class CNCSenderApp:
 
     # ------------------------- Pipeline Send Optimized for GRBL 1.2h -------------------------
     def start_pipeline_send(self):
+            # Disable tabs while sending
+        self.set_tabs_state('disabled')
+        
         if not self.gcode_lines:
             messagebox.showwarning("No G-code", "Load a G-code file first.")
             return
@@ -1741,6 +1761,8 @@ class CNCSenderApp:
 
         self.current_line_index = 0
         self.pending_lines.clear()
+            # Re-enable tabs
+        self.set_tabs_state('normal')
 
         try:
             self.progress['value'] = 0
@@ -1751,7 +1773,7 @@ class CNCSenderApp:
 
 
     def _pipeline_send_loop_grbl12h(self):
-        update_interval = 15 # ----------- Simulation Update Interval---------------------
+        update_interval = self.update_interval # ----------- Simulation Update Interval---------------------
         sim_yield = 0.002
 
         while self.current_line_index < self.total_lines:
@@ -1829,6 +1851,9 @@ class CNCSenderApp:
 
         # Finish
         self.status_var.set("Idle")
+        
+            # Re-enable tabs
+        self.set_tabs_state('normal')
 
 
 
