@@ -31,7 +31,7 @@ GRBL_BUFFER_MAX = 16      # GRBL 1.2h planner buffer (safe)
 class CNCSenderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Pilot X V1.7")
+        self.root.title("Pilot X V1.8")
         self.root.geometry("1280x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
@@ -1037,15 +1037,41 @@ class CNCSenderApp:
     #-------------------------Macro Functions-----------------------------------------------------
     #---------------- Macro Data Persistence ----------------
     def _load_macros(self):
+        import os, json
+
         self.macros_file = "macros.json"
-        print("Macros Json Loaded...")
         self.macros = {}
+
+        # ---------- Default macros ----------
+        default_macros = {
+           
+            "Spindle On": "M3 S1000",
+            "Spindle Off": "M5",
+            "Zero X": "G10 L20 P1 X0",
+            "Zero Y": "G10 L20 P1 Y0",
+            "Zero Z": "G10 L20 P1 Z0",
+            "Safe Z": "G0 Z5"
+        }
+
         if os.path.exists(self.macros_file):
             try:
                 with open(self.macros_file, "r") as f:
                     self.macros = json.load(f)
-            except Exception:
-                self.macros = {}
+                print("Macros JSON loaded.")
+            except Exception as e:
+                print(f"Macros JSON invalid, recreating default ({e})")
+                self.macros = default_macros.copy()
+        else:
+            print("macros.json not found, creating default macros.")
+            self.macros = default_macros.copy()
+
+        # ---------- Ensure file exists ----------
+        try:
+            with open(self.macros_file, "w") as f:
+                json.dump(self.macros, f, indent=4)
+        except Exception as e:
+            print("Failed to write macros.json:", e)
+
 
     def _save_macros(self):
         try:
@@ -1281,7 +1307,7 @@ class CNCSenderApp:
         # self._wait_for_ok(2.0)
 
         # -----------------------------
-        # 3. Sweep past center
+        # 3. Retract User Distance
         # -----------------------------
         self._send_line(f"G0 X{retractx}")
         self._wait_for_ok(3.0)
@@ -1314,7 +1340,7 @@ class CNCSenderApp:
         self._log(" Set WCS X=0")
         self._send_line("G90")              # Absolute
         self._wait_for_ok(0.1)
-        self._send_line("G10 L20 P1 Y0")    # Zero Z offset in G54
+        self._send_line("G10 L20 P1 X0")    # Zero X offset in G54
         self._wait_for_ok(0.2)
 
         return x_center
@@ -1349,7 +1375,7 @@ class CNCSenderApp:
         # self._wait_for_ok(2.0)
 
         # -----------------------------
-        # 3. Move past center toward back
+        # 3. Retract User Distance
         # -----------------------------
         self._send_line(f"G0 Y{retracty}")  
         self._wait_for_ok(3.0)
