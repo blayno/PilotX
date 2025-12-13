@@ -31,7 +31,7 @@ GRBL_BUFFER_MAX = 16      # GRBL 1.2h planner buffer (safe)
 class CNCSenderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Pilot X V1.8")
+        self.root.title("Pilot X V1.9")
         self.root.geometry("1280x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
@@ -1664,6 +1664,12 @@ class CNCSenderApp:
         # >>> draw gcode on load <<<
         self._update_toolpath(gcode_lines=self.gcode_lines, redraw=True)
         self._log(f"Loaded {self.total_lines} lines from {path}")
+        
+        # After full toolpath draw, draw cone
+        for line in self.gcode_lines:
+            if any(a in line.upper() for a in ("X", "Y", "Z")):
+                self._update_toolpath(gcode_line=line, redraw=True)
+                break        
         
         
 
