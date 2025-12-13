@@ -31,7 +31,7 @@ GRBL_BUFFER_MAX = 16      # GRBL 1.2h planner buffer (safe)
 class CNCSenderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Pilot X V1.6")
+        self.root.title("Pilot X V1.7")
         self.root.geometry("1280x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
@@ -258,7 +258,7 @@ class CNCSenderApp:
         #ttk.Button(f, text="Blank",).grid(row=1, column=4, padx=6, sticky='e')
 
         ttk.Button(f, text="Load G-code", command=self.load_gcode_file).grid(row=1, column=0, pady=8, sticky='w')
-        ttk.Checkbutton(f, text="Simulation Mode", variable=self.simulate_mode).grid(row=1, column=0, sticky='e')
+        ttk.Checkbutton(f, text="Simulation Mode /", variable=self.simulate_mode).grid(row=1, column=0, sticky='e')
         ttk.Label(f, text="Sim Speed:").grid(row=1, column=1, sticky='w')
         ttk.Scale(f, from_=0.1, to=5.0, variable=self.sim_speed, orient='horizontal', length=160).grid(row=1, column=1, sticky='e')
         
@@ -410,7 +410,17 @@ class CNCSenderApp:
         # --- Create legend proxies ---
         rapid_proxy = mlines.Line2D([0], [0], color='red', linewidth=2)
         cut_proxy   = mlines.Line2D([0], [0], color='blue', linewidth=2)
-        Pos_proxy   = mlines.Line2D([0], [0], color='Yellow', linewidth=8)
+        #Pos_proxy   = mlines.Line2D([0], [0], color='Yellow', linewidth=8)
+        #draw triangle marker instead of a line
+        Pos_proxy = mlines.Line2D(
+            [], [],
+            marker='v',              # triangle marker
+            markersize=14,
+            markerfacecolor='yellow',
+            markeredgecolor='black',
+            linestyle='None',
+            label='Current Tool'
+)
         
         # --- Add figure-level legend to your existing figure ---
         self.fig.legend([rapid_proxy, cut_proxy,Pos_proxy],
@@ -605,17 +615,17 @@ class CNCSenderApp:
         ttk.Button(actions, text="Stop Probing", command=self.stop_autolevel).grid(row=0, column=1, padx=6)
         ttk.Button(actions, text="Visualize Map", command=self.visualize_al_map).grid(row=1, column=1, padx=6, pady=10)
         
-        style = ttk.Style()
-        style.configure("Red.TButton", foreground="red")
-        ttk.Button(actions,text="E Stop/Sft Rst",style="Red.TButton",command=lambda: self.send_realtime(b"\x18")).grid(row=1, column=2,padx=6, pady=10)
+
         
-        # ttk.Button(actions, text="Export CSV", command=self.export_al_csv).grid(row=1, column=2, padx=6, pady=10)
+        ttk.Button(actions, text="Export CSV", command=self.export_al_csv).grid(row=1, column=2, padx=6, pady=10)
+        ttk.Button(actions, text="Load CSV", command=self.load_al_csv).grid(row=1, column=3, padx=6, pady=10)
+        
         ttk.Button(actions, text="Apply Correction to Loaded G-code", command=self.apply_height_map_to_gcode).grid(row=0, column=2, padx=6)
         ttk.Button(actions, text="Save Corrected G-code", command=self.save_corrected_gcode).grid(row=0, column=3, padx=6)
         
         ttk.Button(actions, text="AutoLevel Ready",command=self.AutolevelReady).grid(row=1, column=0, padx=10, pady=10)
 
-# Map console / simple table 
+        # Map console / simple table 
         map_frame = ttk.LabelFrame(frame, text="Probe Log / Map", padding=6) 
         map_frame.grid(row=3, column=0, sticky='nsew', padx=6, pady=6) 
         map_frame.columnconfigure(0, weight=1) 
@@ -623,11 +633,15 @@ class CNCSenderApp:
         self.al_console.grid(row=0, column=0, sticky='nsew')
         
         # Save UI Settings
-        save_ui_settings2 = ttk.LabelFrame(frame, text="Save UI Settings", padding=6) 
-        save_ui_settings2.grid(row=4, column=0, sticky='nw', padx=6, pady=6) 
-        save_ui_settings2.columnconfigure(0, weight=1)
+        ss2 = ttk.LabelFrame(frame, text="Save UI Settings / E stop", padding=6) 
+        ss2.grid(row=4, column=0, sticky='nw', padx=6, pady=6) 
+        ss2.columnconfigure(0, weight=1)
                
-        ttk.Button(save_ui_settings2, text="Save UI Settings",command=self.update_ui_settings).grid(row=0, column=0, padx=10)
+        ttk.Button(ss2, text="Save UI Settings",command=self.update_ui_settings).grid(row=0, column=0, padx=10)
+        
+        style = ttk.Style()
+        style.configure("Red.TButton", foreground="red")
+        ttk.Button(ss2,text="E Stop/Sft Rst",style="Red.TButton",command=lambda: self.send_realtime(b"\x18")).grid(row=0, column=2,padx=6)
         
         tips_frame = ttk.Frame(frame)
         tips_frame.grid(row=6, column=0, rowspan=4, sticky='nw', padx=6)
@@ -663,7 +677,7 @@ class CNCSenderApp:
         z_frame = ttk.LabelFrame(frame, text="Z Probe", padding=8)
         z_frame.pack(fill='x', pady=5)
         
-        ttk.Label(frame, text="Some text under the frame").pack(anchor='w')
+        #ttk.Label(frame, text="Take Care Probing").pack(anchor='w')
 
         # ttk.Label(z_frame, text="Safe Z:").grid(row=0, column=0, sticky='e')
         # self.z_safe_entry = ttk.Entry(z_frame, width=8)
@@ -716,6 +730,12 @@ class CNCSenderApp:
         #self.x_dist_entry.insert(0, "100.0")
         self.x_dist_entry.insert(0, str(self.config["x_prb_distance"]))
         
+        ttk.Label(x_frame, text="Retract Distance:").grid(row=1, column=0, sticky='e')
+        self.x_rtcdist_entry = ttk.Entry(x_frame, width=8)
+        self.x_rtcdist_entry.grid(row=1, column=1, padx=5, pady=6)
+        #self.x_dist_entry.insert(0, "100.0")
+        self.x_rtcdist_entry.insert(0, str(self.config["x_rtc_distance"]))
+        
 
         ttk.Label(x_frame, text="Feed Rate:").grid(row=0, column=2, sticky='e')
         self.x_feed_entry = ttk.Entry(x_frame, width=8)
@@ -735,7 +755,13 @@ class CNCSenderApp:
         self.y_dist_entry = ttk.Entry(y_frame, width=8)
         self.y_dist_entry.grid(row=0, column=1, padx=5)
         #self.y_dist_entry.insert(0, "100.0")
-        self.y_dist_entry.insert(0, str(self.config["y_prb_distance"]))
+        self.y_dist_entry.insert(0, str(self.config["y_rtc_distance"]))
+        
+        ttk.Label(y_frame, text="Retract Distance:").grid(row=1, column=0, sticky='e')
+        self.y_rtcdist_entry = ttk.Entry(y_frame, width=8)
+        self.y_rtcdist_entry.grid(row=1, column=1, padx=5)
+        #self.y_dist_entry.insert(0, "100.0")
+        self.y_rtcdist_entry.insert(0, str(self.config["y_rtc_distance"]))
 
         ttk.Label(y_frame, text="Feed Rate:").grid(row=0, column=2, sticky='e')
         self.y_feed_entry = ttk.Entry(y_frame, width=8)
@@ -746,7 +772,7 @@ class CNCSenderApp:
         ttk.Button(y_frame, text="Run Y Center Probe", command=self.y_center_probe_from_entries).grid(row=0, column=4, padx=10)
         ttk.Label(y_frame, text="Retract is Probe Distance so measure your probing \nDont enter a random number or you might crash").grid(row=0, column=5, padx=10)
                   
-        ss_frame = ttk.LabelFrame(frame, text="Save UI Settings", padding=8)
+        ss_frame = ttk.LabelFrame(frame, text="Save UI Settings / E stop", padding=8)
         ss_frame.pack(fill='x', pady=5)
         
         ttk.Button(ss_frame, text="Save UI Settings",
@@ -859,7 +885,9 @@ class CNCSenderApp:
             "z_probe_feed": 50,
             "z_touchplate_thickness": 1,
             "x_prb_distance": 15,
+            "x_rtc_distance": 15,
             "x_prb_feed": 50,
+            "y_rtc_distance": 15,
             "y_prb_distance": 15,
             "y_prb_feed": 50,
             "z_retract": 5,
@@ -906,10 +934,13 @@ class CNCSenderApp:
             self.config["z_probe_feed"] = float(self.z_feed_entry.get())
             self.config["z_touchplate_thickness"] = float(self.z_touch_entry.get())
             self.config["x_prb_distance"] = float(self.x_dist_entry.get())
+            self.config["x_rtc_distance"] = float(self.x_rtcdist_entry.get())
             self.config["x_prb_feed"] = float(self.x_feed_entry.get())
             self.config["y_prb_distance"] = float(self.y_dist_entry.get())
+            self.config["y_rtc_distance"] = float(self.y_rtcdist_entry.get())
             self.config["y_prb_feed"] = float(self.y_feed_entry.get())
             self.config["z_retract"] = float(self.z_retract_entry.get())
+            self.x_rtcdist_entry 
             
             #-------- Autolevel Tab --------
             self.config["al_xstart"] = self.al_xstart.get()
@@ -1219,7 +1250,7 @@ class CNCSenderApp:
         self._wait_for_ok(0.1)
         
 
-    def _do_x_center_probe(self, dist, feed, retract=2.0):
+    def _do_x_center_probe(self, dist, feed,retractx, retract=2.0):
         
         self._log("Step 0: Reset WCS X=0")
         self._send_line("G90")              # Absolute
@@ -1252,7 +1283,7 @@ class CNCSenderApp:
         # -----------------------------
         # 3. Sweep past center
         # -----------------------------
-        self._send_line(f"G0 X{dist}")
+        self._send_line(f"G0 X{retractx}")
         self._wait_for_ok(3.0)
 
         # -----------------------------
@@ -1290,7 +1321,7 @@ class CNCSenderApp:
 
 
 
-    def _do_y_center_probe(self, dist, feed, retract=2.0):
+    def _do_y_center_probe(self, dist, feed,retracty, retract=2.0):
         
         self._log("Reset WCS Y=0")
         self._send_line("G90")              # Absolute
@@ -1320,7 +1351,7 @@ class CNCSenderApp:
         # -----------------------------
         # 3. Move past center toward back
         # -----------------------------
-        self._send_line(f"G0 Y{dist}")  
+        self._send_line(f"G0 Y{retracty}")  
         self._wait_for_ok(3.0)
 
         # -----------------------------
@@ -1430,6 +1461,7 @@ class CNCSenderApp:
             touch = float(self.z_touch_entry.get())
             retract = float(self.z_retract_entry.get())
             
+            
         except ValueError:
             self._log("Invalid Z probe input.")
             return
@@ -1447,6 +1479,7 @@ class CNCSenderApp:
         try:
             dist = float(self.x_dist_entry.get())
             feed = float(self.x_feed_entry.get())
+            retractx = float(self.x_rtcdist_entry.get())
         except ValueError:
             self._log("Invalid X probe input.")
             return
@@ -1454,7 +1487,7 @@ class CNCSenderApp:
         self._log("Starting X center probe...")
         threading.Thread(
             target=self._do_x_center_probe,
-            args=(dist, feed),
+            args=(dist, feed, retractx),
             daemon=True
         ).start()
 
@@ -1464,6 +1497,7 @@ class CNCSenderApp:
         try:
             dist = float(self.y_dist_entry.get())
             feed = float(self.y_feed_entry.get())
+            retracty = float(self.y_rtcdist_entry.get())
         except ValueError:
             self._log("Invalid Y probe input.")
             return
@@ -1471,7 +1505,7 @@ class CNCSenderApp:
         self._log("Starting Y center probe...")
         threading.Thread(
             target=self._do_y_center_probe,
-            args=(dist, feed),
+            args=(dist, feed, retracty),
             daemon=True
         ).start()
 
@@ -1664,13 +1698,24 @@ class CNCSenderApp:
         self.send_manager_stop.set()
         self.send_manager_pause.clear()
         self.status_var.set("Stopped")
+
+        # --- Stop spindle ---
+        if self.serial_connection and self.serial_connection.is_open:
+            try:
+                self.serial_connection.write(b"M5\n")
+                self.serial_connection.flush()
+            except Exception as e:
+                print("Failed to send M5:", e)
+
         self.current_line_index = 0
         self.pending_lines.clear()
+
         try:
             self.progress['value'] = 0
             self.current_label.config(text="Line: 0 / 0")
         except Exception:
             pass
+
 
 
     def _pipeline_send_loop_grbl12h(self):
@@ -1857,7 +1902,7 @@ class CNCSenderApp:
                             # single points as small markers (optional)
                             self.ax.scatter(xs, ys, zs, s=2)
 
-                    # plot rapid segments (yellow)
+                    # plot rapid segments (red)
                     for seg in rapid_segs:
                         xs = [p[0] for p in seg]
                         ys = [p[1] for p in seg]
@@ -2490,6 +2535,53 @@ class CNCSenderApp:
             messagebox.showinfo("Exported", f"Probe map saved to {path}")
         except Exception as e:
             messagebox.showerror("Export failed", str(e))
+            
+    def load_al_csv(self):
+        path = filedialog.askopenfilename(
+            filetypes=[("CSV", "*.csv"), ("All files", "*.*")]
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, "r", newline='') as csvf:
+                reader = csv.reader(csvf)
+                rows = list(reader)
+
+            if len(rows) < 2 or len(rows[0]) < 2:
+                raise ValueError("Invalid probe CSV format")
+
+            # --- Parse X values from header ---
+            xs = [float(x) for x in rows[0][1:]]
+
+            # --- Parse Y values and heights ---
+            ys = []
+            heights = []
+
+            for row in rows[1:]:
+                ys.append(float(row[0]))
+                heights.append([
+                    float(v) if v.strip() != "" else np.nan
+                    for v in row[1:]
+                ])
+
+            hs = np.array(heights, dtype=float)
+
+            # --- Store safely ---
+            with self._al_lock:
+                self.al_xs = xs
+                self.al_ys = ys
+                self.al_heights = hs
+
+            messagebox.showinfo("Loaded", f"Probe map loaded from {path}")
+
+            # Optional redraw / refresh
+            if hasattr(self, "update_probe_map"):
+                self.update_probe_map()
+
+        except Exception as e:
+            messagebox.showerror("Load failed", str(e))
+
 
 
 
