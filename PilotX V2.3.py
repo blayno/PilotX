@@ -32,7 +32,7 @@ class CNCSenderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PilotX V2.2")
-        self.root.geometry("1280x880")
+        self.root.geometry("1320x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
         self.root.after(300, self.show_logo_window)
