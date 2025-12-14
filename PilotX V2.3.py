@@ -31,7 +31,7 @@ GRBL_BUFFER_MAX = 16      # GRBL 1.2h planner buffer (safe)
 class CNCSenderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PilotX V2.2")
+        self.root.title("PilotX V2.3")
         self.root.geometry("1320x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
