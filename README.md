@@ -1,3 +1,4 @@
+![Screenshot](images/PilotX.PNG)
 
 This is an experimental Gcode sender written mostly with Chat GPT 5.1
 IMPORTANT DISCLAIMER: This is my personal project and has only been tested by me on my OX CNC Running GRBL Mega 5X, GRBL 1.2H.
