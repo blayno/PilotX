@@ -31,7 +31,7 @@ GRBL_BUFFER_MAX = 16      # GRBL 1.2h planner buffer (safe)
 class CNCSenderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PilotX V2.1")
+        self.root.title("PilotX V2.2")
         self.root.geometry("1280x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
@@ -415,33 +415,33 @@ class CNCSenderApp:
         self.canvas = FigureCanvasTkAgg(self.fig, master=vis_frame)
         self.canvas.get_tk_widget().pack(fill='both', expand=True)
         
-        #---------- Draw Legend inside matplotlib------------
-        import matplotlib.lines as mlines
+        # #---------- Draw Legend inside matplotlib------------
+        # import matplotlib.lines as mlines
 
-        # --- Create legend proxies ---
-        rapid_proxy = mlines.Line2D([0], [0], color='red', linewidth=2)
-        cut_proxy   = mlines.Line2D([0], [0], color='blue', linewidth=2)
-        #Pos_proxy   = mlines.Line2D([0], [0], color='Yellow', linewidth=8)
-        #draw triangle marker instead of a line
-        Pos_proxy = mlines.Line2D(
-            [], [],
-            marker='v',              # triangle marker
-            markersize=14,
-            markerfacecolor='yellow',
-            markeredgecolor='black',
-            linestyle='None',
-            label='Current Tool'
-)
+        # # --- Create legend proxies ---
+        # rapid_proxy = mlines.Line2D([0], [0], color='red', linewidth=2)
+        # cut_proxy   = mlines.Line2D([0], [0], color='blue', linewidth=2)
+        # #Pos_proxy   = mlines.Line2D([0], [0], color='Yellow', linewidth=8)
+        # #draw triangle marker instead of a line
+        # Pos_proxy = mlines.Line2D(
+            # [], [],
+            # marker='v',              # triangle marker
+            # markersize=14,
+            # markerfacecolor='yellow',
+            # markeredgecolor='black',
+            # linestyle='None',
+            # label='Current Tool'
+# )
         
-        # --- Add figure-level legend to your existing figure ---
-        self.fig.legend([rapid_proxy, cut_proxy,Pos_proxy],
-                        ['Rapid (G0)', 'Cut Path (G1)', 'Position'],
-                        loc='upper right',
-                        framealpha=0.8)
+        # # --- Add figure-level legend to your existing figure ---
+        # self.fig.legend([rapid_proxy, cut_proxy,Pos_proxy],
+                        # ['Rapid (G0)', 'Cut Path (G1)', 'Position'],
+                        # loc='upper right',
+                        # framealpha=0.8)
 
-        # --- Redraw canvas ---
-        self.canvas.draw_idle()
-        self.canvas.flush_events()
+        # # --- Redraw canvas ---
+        # self.canvas.draw_idle()
+        # self.canvas.flush_events()
         #---------------------------------------------------------------
         
                 # logo on right of visualiser
@@ -1680,6 +1680,34 @@ class CNCSenderApp:
         with open(path, "r", encoding='utf-8', errors='ignore') as f:
             # remove empty lines and comments
             self.gcode_lines = [line.rstrip() for line in f if line.strip() and not line.strip().startswith(';')]
+            
+                    #---------- Draw Legend inside matplotlib------------
+        import matplotlib.lines as mlines
+
+        # --- Create legend proxies ---
+        rapid_proxy = mlines.Line2D([0], [0], color='red', linewidth=2)
+        cut_proxy   = mlines.Line2D([0], [0], color='blue', linewidth=2)
+        #Pos_proxy   = mlines.Line2D([0], [0], color='Yellow', linewidth=8)
+        #draw triangle marker instead of a line
+        Pos_proxy = mlines.Line2D(
+            [], [],
+            marker='v',              # triangle marker
+            markersize=14,
+            markerfacecolor='yellow',
+            markeredgecolor='black',
+            linestyle='None',
+            label='Current Tool'
+)
+        
+        # --- Add figure-level legend to your existing figure ---
+        self.fig.legend([rapid_proxy, cut_proxy,Pos_proxy],
+                        ['Rapid (G0)', 'Cut Path (G1)', 'Position'],
+                        loc='upper right',
+                        framealpha=0.8)
+
+        # --- Redraw canvas ---
+        self.canvas.draw_idle()
+        self.canvas.flush_events()
 
         # Inject G90 at the start
         self.gcode_lines.insert(0, "G90")
