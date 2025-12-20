@@ -1,0 +1,8 @@
+{
+    "Spindle On": "M3 S1000",
+    "Spindle Off": "M5",
+    "Zero X": "G10 L20 P1 X0",
+    "Zero Y": "G10 L20 P1 Y0",
+    "Zero Z": "G10 L20 P1 Z0",
+    "Safe Z": "G0 Z5"
+}

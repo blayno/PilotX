@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sender-Style G-code Simulator (Streaming)</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #1e1e1e;
+    color: #ddd;
+    margin: 0;
+    display: flex;
+    height: 100vh;
+}
+textarea {
+    background: #111;
+    color: #0f0;
+    border: none;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 14px;
+    resize: none;
+}
+#toolUI textarea {
+    width: 100%;
+    height: calc(100vh - 210px); /* header + padding */
+    min-height: 200px;
+    box-sizing: border-box;
+}
+}
+canvas { flex: 1; background: #000; }
+
+.toolbar {
+    font-size: 15px;
+    font-weight: 600;
+    position: absolute;
+    top: 70px;
+    right: 10px;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    z-index: 10;
+
+    height: 20px;          /* sensible toolbar height */
+    min-height: 20px;
+}
+
+
+
+.toolbar button { padding: 8px 12px; font-size: 15px; cursor: pointer; }
+
+/* STATUS BAR */
+#statusBar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background: #111;
+    color: #0f0;
+    font-family: monospace;
+    font-size: 13px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    padding: 0 10px;
+    border-top: 1px solid #333;
+    z-index: 20;
+}
+
+#toolTab,
+#toolUI {
+    padding: 10px;
+}
+
+#toolTab {
+    margin-bottom: 12px;
+}
+
+
+
+</style>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+</head>
+<body>
+
+
+<div class="toolbar">
+	<label>Z Offset: <input type="number" id="zOffset" value="0" step="1.0"></label>
+    <button onclick="startStream()">Play</button>
+    <button onclick="pauseStream()">Pause</button>
+    <button onclick="resetSim()">Reset</button>
+	<button onclick="fileInput.click()">Load G-code</button>
+	<label>Speed: <span id="speedVal">100</span></label>
+    <input type="range" id="speedSlider" min="10" max="1000" value="100">
+    <input type="file" id="fileInput" accept=".gcode,.nc,.txt,.tap" hidden>
+</div>
+
+<!-- STATUS BAR -->
+<div id="statusBar">
+    <span id="statusText">Idle</span>
+    <span id="lineText">Line: –</span>
+    <span id="posText">X:0 Y:0 Z:0</span>	
+
+</div>
+
+<!-- TOOL SELECTION TAB -->
+
+<div id="toolTab" class="tabContent active" style="top: 140px; right:10px;">
+<div class="tabButton active" onclick="switchToolTab(0)">Tools</div>
+    <label><input type="radio" name="tool" value="cone" checked> Cone</label>
+    <label><input type="radio" name="tool" value="flat">  Flat Endmill</label>
+    <label><input type="radio" name="tool" value="ball">  Ball Endmill</label>
+</div>
+
+<div id="toolUI">
+    <label>
+        Tool Type
+        <select id="toolType">
+            <option value="cone">Cone</option>
+            <option value="flat">Flat</option>
+            <option value="ball">Ball</option>
+        </select>
+    </label>
+
+    <label>
+        Radius
+        <input type="number" id="toolRadius" step="0.1" value="3">
+    </label>
+
+    <label>
+        Height
+        <input type="number" id="toolHeight" step="1" value="50">
+    </label>
+
+    <label>
+        Color
+        <input type="color" id="toolColor" value="#00ffff">
+    </label>
+
+    <!-- COLLAPSIBLE GCODE -->
+    <div class="collapsible">
+        <div class="collapsible-header" onclick="toggleGcode()">
+            ▶ G-code Console
+        </div>
+
+        <div class="collapsible-body" id="gcodePanel">
+            <textarea id="gcode">G90
+G0 X0 Y0 
+G1 Z-1 F200
+G1 X50 Y0
+G1 X50 Y50
+G1 X0 Y50
+G1 X0 Y0
+G1 Z-2 F200
+G1 X50 Y0
+G1 X50 Y50
+G1 X0 Y50
+G1 X0 Y0
+G1 Z-3 F200
+G1 X50 Y0
+G1 X50 Y50
+G1 X0 Y50
+G1 X0 Y0
+G0 Z5
+            </textarea>
+        </div>
+    </div>
+
+</div>
+
+
+
+<canvas id="canvas"></canvas>
+
+
+
+<script>
+// ================= THREE.JS SETUP =================
+const canvas = document.getElementById("canvas");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(30, canvas.clientWidth/canvas.clientHeight, 0.1, 10000);
+camera.position.set(0, -600, 200);
+camera.lookAt(0,0,0);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+
+scene.add(new THREE.AmbientLight(0xffffff,0.4));
+const dl = new THREE.DirectionalLight(0xffffff,0.8);
+dl.position.set(100,-100,200);
+scene.add(dl);
+
+// --- Grid ---
+const grid = new THREE.GridHelper(400, 40, 0x444444, 0x222222);
+grid.rotateX(Math.PI / 2); // XY plane
+scene.add(grid);
+
+// --- Line Material ---
+const lineMaterial = new THREE.LineBasicMaterial({ color: 0x888888 });
+
+// --- Center Lines ---
+// Center X
+const pointsX = [
+    new THREE.Vector3(-200, 0, 0.01),
+    new THREE.Vector3(200, 0, 0.01)
+];
+const geometryX = new THREE.BufferGeometry().setFromPoints(pointsX);
+const lineX = new THREE.Line(geometryX, lineMaterial);
+scene.add(lineX);
+
+// Center Y
+const pointsY = [
+    new THREE.Vector3(0, -200, 0.01),
+    new THREE.Vector3(0, 200, 0.01)
+];
+const geometryY = new THREE.BufferGeometry().setFromPoints(pointsY);
+const lineY = new THREE.Line(geometryY, lineMaterial);
+scene.add(lineY);
+
+// --- Tick Marks ---
+const tickLength = 2;
+const tickSpacing = 10; // distance between ticks
+
+function addXTicks() {
+    for (let x = -200; x <= 200; x += tickSpacing) {
+        if (x === 0) continue; // skip center
+        const tickGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(x, -tickLength / 2, 0.01),
+            new THREE.Vector3(x, tickLength / 2, 0.01)
+        ]);
+        scene.add(new THREE.Line(tickGeo, lineMaterial));
+    }
+}
+
+function addYTicks() {
+    for (let y = -200; y <= 200; y += tickSpacing) {
+        if (y === 0) continue; // skip center
+        const tickGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-tickLength / 2, y, 0.01),
+            new THREE.Vector3(tickLength / 2, y, 0.01)
+        ]);
+        scene.add(new THREE.Line(tickGeo, lineMaterial));
+    }
+}
+
+addXTicks();
+addYTicks();
+
+
+
+// ================= CAMERA CONTROLS =================
+const target = new THREE.Vector3();
+let drag = false, px = 0, py = 0;
+let mode = null; // "rotate" or "pan"
+
+canvas.addEventListener('mousedown', e => {
+    drag = true;
+    px = e.clientX;
+    py = e.clientY;
+    mode = (e.button === 0) ? 'rotate' : (e.button === 2 ? 'pan' : null);
+});
+canvas.addEventListener('mouseup', () => drag = false);
+canvas.addEventListener('mouseleave', () => drag = false);
+
+canvas.addEventListener('mousemove', e => {
+    if (!drag || !mode) return;
+    const dx = e.clientX - px;
+    const dy = e.clientY - py;
+    px = e.clientX;
+    py = e.clientY;
+
+    if (mode === 'rotate') {
+        const v = camera.position.clone().sub(target);
+        v.applyAxisAngle(new THREE.Vector3(0,1,0), -dx * 0.005);
+        const right = new THREE.Vector3().crossVectors(v, new THREE.Vector3(0,1,0)).normalize();
+        v.applyAxisAngle(right, dy * 0.005);
+        camera.position.copy(v.add(target));
+        camera.lookAt(target);
+    } else if (mode === 'pan') {
+        const panSpeed = 10;
+        const camDir = new THREE.Vector3();
+        camera.getWorldDirection(camDir);
+
+        const right = new THREE.Vector3().crossVectors(camera.up, camDir).normalize();
+        const up = camera.up.clone().normalize();
+
+        camera.position.addScaledVector(right, dx * panSpeed * 0.01);
+        camera.position.addScaledVector(up, dy * panSpeed * 0.01);
+
+        target.addScaledVector(right, dx * panSpeed * 0.01);
+        target.addScaledVector(up, dy * panSpeed * 0.01);
+        camera.lookAt(target);
+    }
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 0.9 : 1.1;
+    const dir = camera.position.clone().sub(target).multiplyScalar(zoomFactor);
+    camera.position.copy(target.clone().add(dir));
+    camera.lookAt(target);
+});
+
+// ================= TOOLS =================
+let tool;
+
+const toolPresets = {
+    cone: { type:'cone', radius:2, height:8, color:0xffff00 },
+    flat: { type:'cylinder', radius:1.5, height:40, color:0x00ffff },
+    ball: { type:'sphere', radius:1.5,height:40, color:0xff00ff }
+};
+
+let currentTool = structuredClone(toolPresets.cone);
+
+function buildTool(opt) {
+    if (tool) scene.remove(tool);
+
+    const mat = new THREE.MeshStandardMaterial({ color: opt.color });
+
+	if (opt.type === 'cone') {
+		const geo = new THREE.ConeGeometry(opt.radius, opt.height, 16);
+		geo.translate(0, -opt.height / 2, 0); // base at Y=0
+
+		tool = new THREE.Mesh(geo, mat);
+
+		// Rotate cone so it points along negative Z
+		tool.rotation.x = -Math.PI / 2; // points along -Z
+		tool.position.z = 0; // tip at z=0
+	
+
+
+    } else if (opt.type === 'cylinder') {
+        const geo = new THREE.CylinderGeometry(opt.radius, opt.radius, opt.height, 16);
+        geo.translate(0, -opt.height / 2, 0); // base at Y=0
+        tool = new THREE.Mesh(geo, mat);
+		
+
+        // Rotate cylinder so it points along negative Z
+        tool.rotation.x = -Math.PI / 2;
+        tool.position.z = 0; // tool tip at 0 / tool.position.z = 0 / tool at height / tool.position.z = opt.radius;
+
+    } else if (opt.type === 'sphere') { // ballnose
+        const group = new THREE.Group();
+
+        // Hemisphere (tip of ballnose)
+        const hemi = new THREE.Mesh(
+            new THREE.SphereGeometry(opt.radius, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+            mat
+        );
+        hemi.position.y = opt.radius; // tip at y=0 before rotation
+        group.add(hemi);
+
+        // Cylinder shaft (behind the hemisphere)
+        const cyl = new THREE.Mesh(
+            new THREE.CylinderGeometry(opt.radius, opt.radius, opt.height, 16),
+            mat
+        );
+        cyl.position.y = opt.height / 2 + opt.radius; // behind the hemisphere
+        group.add(cyl);
+
+        // Rotate tool so it points along negative Z
+        group.rotation.x = Math.PI / 2;
+
+        // Move tool so tip of ballnose is at Z = 0
+        group.position.z = 0; // tooltip at 0 / tool.position.z = 0;
+
+        tool = group;
+    }
+
+    scene.add(tool);
+}
+
+// ================= UI BINDING =================
+const typeSel   = document.getElementById('toolType');
+const radInp    = document.getElementById('toolRadius');
+const hInp      = document.getElementById('toolHeight');
+const colInp    = document.getElementById('toolColor');
+
+function syncUI(opt) {
+    if (opt.type === 'cylinder') {
+        typeSel.value = 'flat';
+    } else if (opt.type === 'sphere') {
+        typeSel.value = 'ball';
+    } else {
+        typeSel.value = opt.type; // cone
+    }
+
+    radInp.value = opt.radius;
+    hInp.value   = opt.height ?? 0;
+    colInp.value = '#' + opt.color.toString(16).padStart(6,'0');
+}
+
+
+function updateFromUI() {
+    currentTool.radius = parseFloat(radInp.value);
+    currentTool.height = parseFloat(hInp.value);
+    currentTool.color  = parseInt(colInp.value.replace('#','0x'));
+    buildTool(currentTool);
+}
+
+[typeSel, radInp, hInp, colInp].forEach(el =>
+    el.addEventListener('input', updateFromUI)
+);
+
+// radio buttons
+document.querySelectorAll('input[name="tool"]').forEach(r => {
+    r.addEventListener('change', e => {
+        currentTool = structuredClone(toolPresets[e.target.value]);
+        syncUI(currentTool);
+        buildTool(currentTool);
+    });
+});
+
+// init
+syncUI(currentTool);
+buildTool(currentTool);
+
+renderer.setAnimationLoop(() => renderer.render(scene,camera));
+
+// ================= PATH GROUPS =================
+let doneGroup = new THREE.Group();
+let todoGroup = new THREE.Group();
+scene.add(doneGroup);
+scene.add(todoGroup);
+
+function clearGroups(){
+    scene.remove(doneGroup); scene.remove(todoGroup);
+    doneGroup = new THREE.Group(); todoGroup = new THREE.Group();
+    scene.add(doneGroup); scene.add(todoGroup);
+}
+
+// ================= GCODE PARSING =================
+// ================= GCODE PARSING WITH Z OFFSET =================
+let segments = [];
+
+function parseGcode(text, minMove = 0.01, maxStep = 1.0) {
+    segments = [];
+    let pos = { x: 0, y: 0, z: 0 };
+    let abs = true, lastG = 1;
+
+    text.split(/\r?\n/).forEach((l, lineIndex) => {
+        const c = l.split(';')[0].trim();
+        if (!c) return;
+
+        const p = c.match(/[A-Z][-+]?\d*\.?\d+/gi);
+        if (!p) return;
+
+        const cmd = {};
+        p.forEach(v => cmd[v[0]] = parseFloat(v.slice(1)));
+
+        if (cmd.G === 90) abs = true;
+        if (cmd.G === 91) abs = false;
+        if ('G' in cmd) lastG = cmd.G;
+
+        if (lastG === 0 || lastG === 1) {
+            const target = { ...pos };
+            if ('X' in cmd) target.x = abs ? cmd.X : pos.x + cmd.X;
+            if ('Y' in cmd) target.y = abs ? cmd.Y : pos.y + cmd.Y;
+            if ('Z' in cmd) target.z = abs ? cmd.Z : pos.z + cmd.Z;
+
+            const dx = target.x - pos.x;
+            const dy = target.y - pos.y;
+            const dz = target.z - pos.z;
+            const dist = Math.hypot(dx, dy, dz);
+
+            if (dist >= minMove) {
+                const steps = Math.max(1, Math.ceil(dist / maxStep));
+                let prev = { ...pos };
+
+                for (let i = 1; i <= steps; i++) {
+                    const t = i / steps;
+                    const cur = {
+                        x: pos.x + dx * t,
+                        y: pos.y + dy * t,
+                        z: pos.z + dz * t
+                    };
+
+                    segments.push({
+                        from: { ...prev },
+                        to: { ...cur },
+                        rapid: lastG === 0,
+                        line: lineIndex
+                    });
+
+                    prev = cur;
+                }
+
+                pos = target;
+            }
+        }
+    });
+
+    // ================= APPLY Z-ZERO OFFSET =================
+    let minZ = Infinity;
+    segments.forEach(s => {
+        minZ = Math.min(minZ, s.from.z, s.to.z);
+    });
+
+    const zOffset = parseFloat(document.getElementById('zOffset')?.value) || 0;
+
+    if (minZ !== Infinity) {
+        segments.forEach(s => {
+            s.from.z = s.from.z - minZ + zOffset;
+            s.to.z   = s.to.z   - minZ + zOffset;
+        });
+    }
+}
+
+//============ apply zoffset live===================
+
+
+// ================= STREAMING SIM =================
+let idx = 0, t = 0, running = false;
+let feed = 100;
+let batchedSegments = [];
+
+function buildTodoPath() {
+    batchedSegments = [];
+    let currentBatch = null;
+
+    segments.forEach(s => {
+        if (!currentBatch || currentBatch.rapid !== s.rapid) {
+            currentBatch = {
+                points: [s.from, s.to],
+                rapid: s.rapid,
+                lines: [s.line]
+            };
+            batchedSegments.push(currentBatch);
+        } else {
+            currentBatch.points.push(s.to);
+            currentBatch.lines.push(s.line);
+        }
+    });
+
+    todoGroup.clear();
+    doneGroup.clear();
+
+    batchedSegments.forEach(batch => {
+        const g = new THREE.BufferGeometry().setFromPoints(
+            batch.points.map(p => new THREE.Vector3(p.x, p.y, p.z))
+        );
+        const m = new THREE.LineBasicMaterial({
+            color: batch.rapid ? 0xff0000 : 0x00ff00,
+            opacity: 0.3,
+            transparent: true
+        });
+        todoGroup.add(new THREE.Line(g, m));
+    });
+}
+
+function highlightLine(line) {
+    const ta = gcode;
+    const lines = ta.value.split('\n');
+    if (!lines[line]) return;
+
+    // Give focus so selection is visible
+    ta.focus({ preventScroll: true });
+
+    // Selection
+    let start = 0;
+    for (let i = 0; i < line; i++) start += lines[i].length + 1;
+    ta.setSelectionRange(start, start + lines[line].length);
+
+    // Scroll (top anchored)
+    const lineHeight = ta.scrollHeight / lines.length;
+    const topOffsetLines = 3;
+
+    let targetScroll = (line - topOffsetLines) * lineHeight;
+    const maxScroll = ta.scrollHeight - ta.clientHeight;
+    targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
+
+    ta.scrollTop += (targetScroll - ta.scrollTop) * 0.45;
+}
+
+
+
+
+function resetSim() {
+    idx = 0; t = 0; running = false;
+    tool.position.set(0, 0, 0);
+
+    // Re-parse G-code to apply Z-offset
+    parseGcode(gcode.value);
+    buildTodoPath();
+
+    statusText.textContent = 'Reset';
+    lineText.textContent = 'Line: –';
+    posText.textContent = 'X:0 Y:0 Z:0';
+}
+
+
+function startStream() {
+    if (!batchedSegments.length) return;
+    running = true;
+    statusText.textContent = 'Running';
+}
+
+function pauseStream() {
+    running = false;
+    statusText.textContent = 'Paused';
+}
+
+
+speedSlider.addEventListener('input', () => {
+    feed = parseFloat(speedSlider.value);
+    speedVal.textContent = feed;
+});
+
+// ================= AXIS HELPER =================
+//const axesHelper = new THREE.AxesHelper(117); // length in world units
+//scene.add(axesHelper);
+
+// ================= THICK AXES =================
+function addThickAxes(len = 117) {
+    const makeAxis = (dir, color) => {
+        const g = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0,0,0),
+            dir.clone().multiplyScalar(len)
+        ]);
+        const m = new THREE.LineBasicMaterial({ color });
+        return new THREE.Line(g, m);
+    };
+
+    scene.add(makeAxis(new THREE.Vector3(1,0,0), 0xff0000)); // X
+    scene.add(makeAxis(new THREE.Vector3(0,1,0), 0x00ff00)); // Y
+    scene.add(makeAxis(new THREE.Vector3(0,0,1), 0x0000ff)); // Z
+}
+
+addThickAxes();
+
+
+
+// ================= AXIS LABELS =================
+function createLabel(text, position) {
+    const canvas = document.createElement('canvas');
+    const size = 128;
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.font = '40px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, size/2, size/2);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+    sprite.scale.set(20, 20, 1);
+    sprite.position.copy(position);
+    scene.add(sprite);
+}
+
+createLabel('X', new THREE.Vector3(120, 0, 0));
+createLabel('Y', new THREE.Vector3(0, 120, 0));
+createLabel('Z', new THREE.Vector3(0, 0, 120));
+
+// ================= WORKPIECE/STOCK =================
+//const stockLength = 100; // X size
+//const stockWidth  = 100; // Y size
+//const stockHeight = 20;  // Z size
+
+//const stockGeo = new THREE.BoxGeometry(stockLength, stockWidth, stockHeight);
+//const stockMat = new THREE.MeshStandardMaterial({
+    //color: 0x5555ff,
+    //opacity: 0.2,
+    //transparent: true,
+    //side: THREE.DoubleSide
+//});
+//const stock = new THREE.Mesh(stockGeo, stockMat);
+//stock.position.set(stockLength/2, stockWidth/2, stockHeight/2);
+//scene.add(stock);
+
+// ================= LOOP =================
+let last = performance.now();
+function animate(tn) {
+    const dt = (tn - last) / 1000;
+    last = tn;
+
+    if (running && idx < batchedSegments.length) {
+        const batch = batchedSegments[idx];
+        const total = batch.points.length - 1;
+
+        const segIdx = Math.min(Math.floor(t * total), total - 1);
+        const segT = t * total - segIdx;
+
+        const a = batch.points[segIdx];
+        const b = batch.points[segIdx + 1];
+
+        const dist = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) || 1;
+        t += dt * feed / dist / total;
+
+        tool.position.lerpVectors(a, b, segT);
+        posText.textContent =
+            `X:${tool.position.x.toFixed(2)} ` +
+            `Y:${tool.position.y.toFixed(2)} ` +
+            `Z:${tool.position.z.toFixed(2)}`;
+
+        const line = batch.lines[segIdx];
+        lineText.textContent = `Line: ${line + 1}`;
+        highlightLine(line);
+
+        if (t >= 1) {
+            const g = new THREE.BufferGeometry().setFromPoints(
+                batch.points.map(p => new THREE.Vector3(p.x, p.y, p.z))
+            );
+            const m = new THREE.LineBasicMaterial({
+                color: batch.rapid ? 0xff0000 : 0x00ff00
+            });
+            doneGroup.add(new THREE.Line(g, m));
+
+            if (todoGroup.children.length) {
+                todoGroup.remove(todoGroup.children[0]);
+            }
+
+            tool.position.copy(batch.points[batch.points.length - 1]);
+            idx++;
+            t = 0;
+        }
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+}
+
+// ================= FILE LOAD =================
+const zOffsetInput = document.getElementById('zOffset');
+const fileInput = document.getElementById('fileInput');
+fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = e => {
+        gcode.value = e.target.result;
+        parseGcode(e.target.result);
+        resetSim();
+    };
+    r.readAsText(f);
+});
+
+function applyZOffsetLive() {
+    if (!segments || segments.length === 0) return;
+
+    // 1. find minimum Z
+    let minZ = Infinity;
+    segments.forEach(s => minZ = Math.min(minZ, s.from.z, s.to.z));
+
+    const offset = parseFloat(zOffsetInput.value) || 0;
+
+    // 2. create a new segments array with adjusted Z
+    const adjustedSegments = segments.map(s => ({
+        from: { x: s.from.x, y: s.from.y, z: s.from.z - minZ + offset },
+        to:   { x: s.to.x,   y: s.to.y,   z: s.to.z - minZ + offset },
+        rapid: s.rapid,
+        line: s.line
+    }));
+
+    // 3. replace old segments
+    segments = adjustedSegments;
+
+    // 4. rebuild the todo/done paths
+    buildTodoPath();
+
+    // 5. update tool position if running
+    if (idx < batchedSegments.length) {
+        const batch = batchedSegments[idx];
+        const total = batch.points.length - 1;
+        const segIdx = Math.min(Math.floor(t * total), total - 1);
+        const segT = t * total - segIdx;
+
+        const a = batch.points[segIdx];
+        const b = batch.points[segIdx + 1];
+        tool.position.lerpVectors(a, b, segT);
+    }
+}
+
+// attach live update
+zOffsetInput.addEventListener('input', applyZOffsetLive);
+
+
+// ================= INIT =================
+parseGcode(gcode.value);
+buildTodoPath();
+resetSim();
+animate(last);
+</script>
+</body>
+</html>

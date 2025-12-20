@@ -31,7 +31,7 @@ GRBL_BUFFER_MAX = 16      # GRBL 1.2h planner buffer (safe)
 class CNCSenderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PilotX V2.3")
+        self.root.title("PilotX V2.4")
         self.root.geometry("1320x880")
 
         # Schedule the logo window to appear AFTER the GUI loads.
@@ -236,7 +236,7 @@ class CNCSenderApp:
         # f = ttk.Frame(sender_frame, padding=4)
         # f.pack(fill='both', expand=True)
         
-                # ---- Add Connect frame ----
+                # ---- Add Machine frame ----
         f = ttk.LabelFrame(sender_frame, text="Machine", padding=4)
         f.pack(fill='both', expand=True)
         
@@ -480,11 +480,115 @@ class CNCSenderApp:
         # --- Auto-Level Tab ---
         al_frame = ttk.Frame(self.nb, padding=8)
         self.nb.add(al_frame, text="Auto-Level")
+        
+        #----- Tool Change2 ----
+        tlch_tab2 = ttk.Frame(self.nb, padding=8)
+        self.nb.add(tlch_tab2, text='Tool Change 2')
   
 
         self._build_macro_ui(macro_tab)
         self._build_probe_ui(probe_tab)
         self._build_autolevel_ui(al_frame)
+        self._build_tlch_ui2(tlch_tab2)
+        
+
+       
+# ---------------- Tool Change 2 UI ----------------------------------------------------------------------------
+    def _build_tlch_ui2(self, parent):
+        frame = ttk.Frame(parent)
+        frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+                # -------- Tool Probe Settings --------
+        probe_frame2 = ttk.LabelFrame(frame, text="Tool Probe 2 Settings", padding=8)
+        probe_frame2.pack(fill='x', pady=6)
+
+        ttk.Label(probe_frame2, text="Probe Distance:").grid(row=0, column=0, sticky="e")
+        self.tc_probe2_dist_entry = ttk.Entry(probe_frame2, width=8)
+        self.tc_probe2_dist_entry.grid(row=0, column=1, padx=4)
+        # self.tc_probe2_dist_entry.insert(0, str(self.config["probe_distance"]))
+
+        ttk.Label(probe_frame2, text="Feed Rate:").grid(row=0, column=2, sticky="e")
+        self.tc_probe2_feed_entry = ttk.Entry(probe_frame2, width=8)
+        self.tc_probe2_feed_entry.grid(row=0, column=3, padx=4)
+        # self.tc_probe2_feed_entry.insert(0, str(self.config["probe_feed"]))
+
+        ttk.Button(probe_frame2, text="Test Probe",
+                   command=self._tool_probe_test2).grid(row=1, column=3, padx=10, pady=6)
+                   
+#-------------------Tool Setter Section-------------------------------------------
+        # -------- Tool Setter Location --------
+        setter_frame = ttk.LabelFrame(frame, text="Tool Setter Location", padding=8)
+        setter_frame.pack(fill='x', pady=6)
+
+        ttk.Label(setter_frame, text="Setter X:").grid(row=0, column=0, sticky="e")
+        self.tc_setter_x_entry = ttk.Entry(setter_frame, width=8)
+        self.tc_setter_x_entry.grid(row=0, column=1, padx=4)
+        # self.tc_setter_x_entry.insert(0, str(self.config.get("setter_x", 0.0)))
+
+        ttk.Label(setter_frame, text="Setter Y:").grid(row=0, column=2, sticky="e")
+        self.tc_setter_y_entry = ttk.Entry(setter_frame, width=8)
+        self.tc_setter_y_entry.grid(row=0, column=3, padx=4)
+        # self.tc_setter_y_entry.insert(0, str(self.config.get("setter_y", 0.0)))
+
+        ttk.Label(setter_frame, text="Safe Z:").grid(row=0, column=4, sticky="e")
+        self.tc_safez_entry = ttk.Entry(setter_frame, width=8)
+        self.tc_safez_entry.grid(row=0, column=5, padx=4)
+        # self.tc_safez_entry.insert(0, str(self.config.get("safe_z", 10.0)))
+
+        # Calibration button
+        ttk.Button(setter_frame, text="Calibrate Tool Setter",
+                   command=self.calibrate_tool_setter).grid(row=1, column=5, pady=6)
+
+
+        # -------- Tool Change 2 Position --------
+# -------- Tool Change Position --------
+        pos_frame2 = ttk.LabelFrame(frame, text="Tool Change 2 Position", padding=8)
+        pos_frame2.pack(fill='x', pady=6)
+
+
+        ttk.Label(pos_frame2, text="MposX:").grid(row=0, column=0, sticky="e")
+        self.tc_x2_entry = ttk.Entry(pos_frame2, width=8)
+        self.tc_x2_entry.grid(row=0, column=1, padx=4)
+        #self.tc_x_entry.insert(0, "0")
+        # self.tc_x2_entry.insert(0, str(self.config["tool_change_x"]))
+
+        ttk.Label(pos_frame2, text="MposY:").grid(row=0, column=2, sticky="e")
+        self.tc_y2_entry = ttk.Entry(pos_frame2, width=8)
+        self.tc_y2_entry.grid(row=0, column=3, padx=4)
+        #self.tc_y_entry.insert(0, "0")
+        # self.tc_y2_entry.insert(0, str(self.config["tool_change_y"]))
+
+        ttk.Label(pos_frame2, text="Z (safe):").grid(row=0, column=4, sticky="e")
+        self.tc_safez2_entry = ttk.Entry(pos_frame2, width=8)
+        self.tc_safez2_entry.grid(row=0, column=5, padx=4)
+        #self.tc_safez_entry.insert(0, "20")
+        # self.tc_safez2_entry.insert(0, str(self.config["tool_change_Safe_z"]))
+        
+        ttk.Button(pos_frame2, text="Get MPos",
+           command=self._get_current_mpos2).grid(row=1, column=0, columnspan=2, pady=6)
+
+
+
+        # -------- Run Tool Change --------
+        run_frame2 = ttk.LabelFrame(frame, text="Run Tool Change 2", padding=8)
+        run_frame2.pack(fill='x', pady=8)
+
+        ttk.Label(run_frame2, text="New Tool #:").grid(row=0, column=0, sticky="e")
+        self.tc_toolnum2_entry = ttk.Entry(run_frame2, width=8)
+        self.tc_toolnum2_entry.grid(row=0, column=1, padx=4)
+        #self.tc_toolnum_entry.insert(0, "1")
+        # self.tc_toolnum2_entry.insert(0, str(self.config["new_tool"]))
+
+        ttk.Button(run_frame2, text="Run Tool Change 2",
+                   command=self._run_tool_change2).grid(row=0, column=3, padx=10)
+
+        ttk.Button(run_frame2, text="Save UI Settings",
+                  command=self.update_ui_settings).grid(row=0, column=4, padx=10)
+                  
+        ttk.Button(run_frame2, text="Calibrate Tool Setter", command=self.calibrate_tool_setter).grid(row=0, column=5, padx=6)
+
+      
+        
         
                 
 
@@ -792,6 +896,273 @@ class CNCSenderApp:
         style = ttk.Style()
         style.configure("Red.TButton", foreground="red")
         ttk.Button(ss_frame,text="E Stop/Sft Rst",style="Red.TButton",command=lambda: self.send_realtime(b"\x18")).grid(row=0, column=1,padx=6, pady=10)
+
+#----------------------Get Current Mpos Function--------------------------------------
+    #----------------Get Mpos Function-----------------------------------------------
+    
+    def _get_current_mpos2(self):
+        """Fill Tool Change 2 X/Y entries with current machine position."""
+        try:
+            # Read current MPos from DRO variables
+            x = getattr(self, "mpos_x", None)
+            y = getattr(self, "mpos_y", None)
+
+            if x is None or y is None:
+                self._log("MPos not available yet.")
+                return
+
+            # Fill entries
+            self.tc_x2_entry.delete(0, tk.END)
+            self.tc_x2_entry.insert(0, f"{x:.3f}")
+
+            self.tc_y2_entry.delete(0, tk.END)
+            self.tc_y2_entry.insert(0, f"{y:.3f}")
+
+            self._log(f"Captured MPos → X:{x:.3f}  Y:{y:.3f}")
+
+        except Exception as e:
+            self._log(f"Error getting MPos: {e}")
+
+
+#------------------------ Tool Change Functions---------------------------------------
+    #Test Probe Only (no tool change)
+    def _tool_probe_test2(self):
+        try:
+            dist2 = float(self.tc_probe2_dist_entry.get())
+            feed2 = float(self.tc_probe2_feed_entry.get())
+ 
+        except ValueError:
+            self._log("Invalid tool probe settings.")
+            return
+
+        threading.Thread(
+            target=self._do_tool_probe2,
+            args=(dist2, feed2,),
+            daemon=True
+        ).start()
+
+    
+    
+    def _probe_tool2(self, dist2, feed2):
+        """Probes down and returns actual probed MPos Z from GRBL PRB: line."""
+        self._log("Probing...")
+
+        # Send probe command
+        self._send_line(f"G38.2 Z{dist2} F{feed2}")
+
+        # --- Wait for PRB result ---
+        probe_z = None
+        for _ in range(50):  # up to 5 seconds
+            line = self._read_line(timeout=0.1)
+            if line is None:
+                continue
+
+            # Look for PRB report
+            m = re.search(r"PRB:([-.\d]+),([-.\d]+),([-.\d]+):(\d)", line)
+            if m:
+                probe_z = float(m.group(3))  # Z value
+                break
+
+        if probe_z is None:
+            self._log("ERROR: No PRB result received!")
+            return None
+
+        # Retract 5 mm
+        self._send_line("G91 G0 Z5")
+        self._wait_for_ok(1)
+        self._send_line("G90")
+
+        return probe_z
+        
+#--------------------------------------------
+    def _run_tool_change2(self):
+        fields = {
+            "tx2": self.tc_x2_entry.get(),
+            "ty2": self.tc_y2_entry.get(),
+            "safez2": self.tc_safez2_entry.get(),
+            "dist2": self.tc_probe2_dist_entry.get(),
+            "feed2": self.tc_probe2_feed_entry.get(),
+            "toolnum2": self.tc_toolnum2_entry.get(),
+        }
+
+        # # Debug print all fields
+        # for name, value in fields.items():
+            # if value.strip() == "":
+                # self._log(f"ERROR: '{name}' field is EMPTY.")
+                # return
+            # try:
+                # float(value)
+            # except ValueError:
+                # self._log(f"ERROR: '{name}' has invalid number: '{value}'")
+                # return
+
+        # Now safe to convert
+        tx2 = float(fields["tx2"])
+        ty2 = float(fields["ty2"])
+        safez2 = float(fields["safez2"])
+        dist2 = float(fields["dist2"])
+        feed2 = float(fields["feed2"])
+        toolnum2 = int(float(fields["toolnum2"])
+)
+
+        threading.Thread(
+            target=self._do_tool_change_two_probe2,
+            args=(tx2, ty2, safez2, dist2, feed2, toolnum2),
+            daemon=True
+        ).start()
+        
+#---------------------------------
+    def _do_tool_change_two_probe2(self, tx2, ty2, safez2, dist2, feed2, toolnum2):
+
+        self._log(f"=== TWO-PROBE TOOL CHANGE to T{toolnum2} ===")
+
+        # Ensure return positions are stored
+# Always save the current machine position if not already saved
+        try:
+            rx2 = self.tc_return_x2
+            ry2 = self.tc_return_y2
+            rz2 = self.tc_return_z2
+        except AttributeError:
+            self._log("Return-to-cut not stored — using current MPos.")
+            
+            # Use REAL MPos DRO values
+            rx2 = self.mpos_x
+            ry2 = self.mpos_y
+            rz2 = self.mpos_z
+
+            # Save them for next time
+            self.tc_return_x2 = rx2
+            self.tc_return_y2 = ry2
+            self.tc_return_z2 = rz2
+
+
+        # -----------------------------
+        # MOVE TO TOOL CHANGE POSITION
+        # -----------------------------
+        self._send_line(f"G90 G0 Z{safez2}")
+        self._wait_for_ok(2)
+        
+
+
+        self._send_line(f"G53 G0 X{tx2} Y{ty2}")
+        self._wait_for_ok(3)
+        
+        # self._send_line(f"G90 G0 Z-{safez2}")
+        # self._wait_for_ok(2)
+
+        # -----------------------------
+        # FIRST PROBE — OLD TOOL
+        # -----------------------------
+        self._log("Probe 1: Probing OLD tool...")
+        old_probe_z2 = self._probe_tool2(-abs(dist2), feed2)
+        self._log(f"Old tool Z touch = {old_probe_z2}")
+
+        old_tool_offset2 = old_probe_z2
+
+        self._send_line(f"G90 G0 Z{safez2}")
+        self._wait_for_ok(1)
+
+        # -----------------------------
+        # TOOL CHANGE PROMPT
+        # -----------------------------
+        self._log("Waiting for user to change tool...")
+        messagebox.showinfo(
+            "Tool Change",
+            f"Remove old tool.\nInsert NEW Tool T{toolnum2}.\nClick OK when ready."
+        )
+
+        # -----------------------------
+        # SECOND PROBE — NEW TOOL
+        # -----------------------------
+        self._log("Probe 2: Probing NEW tool...")
+        new_probe_z2 = self._probe_tool2(-abs(dist2), feed2)
+        self._log(f"New tool Z touch = {new_probe_z2}")
+
+        new_tool_offset2 = new_probe_z2
+
+        # -----------------------------
+        # COMPUTE DELTA Z & APPLY OFFSET
+        # -----------------------------
+        H = self.config.get("tool_setter_height", 0.0)
+
+        old_eff = old_probe_z2 - H
+        new_eff = new_probe_z2 - H
+
+        delta2 = old_eff - new_eff
+
+        self._log(f"Tool length Δ = {delta2:.4f} mm")
+        self._log("Applying new WCS Z offset...")
+
+        self._send_line(f"G10 L20 P1 Z{delta2:.4f}")
+        self._wait_for_ok(1)
+
+        # -----------------------------
+        # RETURN TO ORIGINAL POSITION
+        # -----------------------------
+        self._log("Returning to cut position...")
+
+        # Move up safely first
+        self._send_line(f"G90 G0 Z{safez2}")
+        self._wait_for_ok(1)
+
+        # Move back to saved XY
+        self._send_line(f"G53 G0 X{rx2} Y{ry2}")
+        self._wait_for_ok(2)
+
+        # Then gently return to saved Z
+        self._send_line(f"G53 G1 Z{rz2} F100")
+        self._wait_for_ok(2)
+
+        # -----------------------------
+        # RESUME PROGRAM
+        # -----------------------------
+        self._log("Resuming program...")
+        self._send_line("~")
+        time.sleep(0.2)
+
+        self._update_position_labels()
+        self._log("=== Tool change complete ===")
+#--------------Calibrate Tool Setter Function-----------------------------------------------
+    def calibrate_tool_setter(self):
+        try:
+            tx = float(self.tc_setter_x_entry.get())
+            ty = float(self.tc_setter_y_entry.get())
+            safez = float(self.tc_safez_entry.get())
+            dist = float(self.tc_probe2_dist_entry.get())
+            feed = float(self.tc_probe2_feed_entry.get())
+        except Exception as e:
+            messagebox.showerror("Error", f"Invalid calibration values: {e}")
+            return
+
+        self._log(f"Calibrating tool setter at {tx}, {ty}, safe Z {safez}, dist {dist}, feed {feed}")
+        self._log("=== TOOL SETTER CALIBRATION ===")
+        self._log("Moving to tool setter...")
+
+        # Move up safely
+        self._send_line(f"G90 G0 Z{safez}")
+        self._wait_for_ok(1)
+
+        # Move to the setter
+        self._send_line(f"G53 G0 X{tx} Y{ty}")
+        self._wait_for_ok(2)
+
+        # Probe the setter
+        self._log("Probing setter surface...")
+        probe_z = self._probe_tool(-abs(dist), feed)
+        self._log(f"Setter touched at MPos Z = {probe_z}")
+
+        # Save the height
+        self.config["tool_setter_height"] = probe_z
+        self.save_settings()
+
+        self._wait_for_ok(10)
+        messagebox.showinfo(
+            "Calibration Complete",
+            f"Tool setter height saved:\nZ = {probe_z:.4f}"
+        )
+
+        self._log("=== Calibration Complete ===")
+
 
 #------------------- Disable Tabs Function--------------------------------------
     def set_tabs_state(self, state='normal'):
