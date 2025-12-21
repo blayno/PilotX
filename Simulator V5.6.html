@@ -79,6 +79,15 @@ canvas { flex: 1; background: #000; }
     margin-bottom: 12px;
 }
 
+#toolTab label {
+    display: block;        /* stack vertically */
+    margin-top: 20px;      /* space between options */
+    cursor: pointer;
+}
+
+
+
+
 
 
 </style>
@@ -110,11 +119,39 @@ canvas { flex: 1; background: #000; }
 <!-- TOOL SELECTION TAB -->
 
 <div id="toolTab" class="tabContent active" style="top: 140px; right:10px;">
-<div class="tabButton active" onclick="switchToolTab(0)">Tools</div>
-    <label><input type="radio" name="tool" value="cone" checked> Cone</label>
-    <label><input type="radio" name="tool" value="flat">  Flat Endmill</label>
-    <label><input type="radio" name="tool" value="ball">  Ball Endmill</label>
+    <div class="tabButton active" onclick="switchToolTab(0)">Tools</div>
+
+    <!-- Tool selection -->
+    <div class="toolOptions">
+        <label><input type="radio" name="tool" value="cone" checked> Cone</label>
+        <label><input type="radio" name="tool" value="flat"> Flat Endmill</label>
+        <label><input type="radio" name="tool" value="ball"> Ball Endmill</label>
+    </div>
+
+    <!-- Grid settings -->
+    <div class="gridOptions">
+        <label>Grid Size
+            <input id="gridSize" type="number" value="400" min="10" step="10">
+        </label>
+        <label>Grid Divisions
+            <input id="gridDivs" type="number" value="40" min="1" step="1">
+        </label>
+<label for="labelStep">Label step (mm): 
+<input type="number" id="labelStep" value="10" min="10" step="10">
+</label>
+
+<label>
+    Show Measurements:
+    <input type="checkbox" id="showLabels" checked>
+</label>
+
+
+    </div>
 </div>
+
+
+
+
 
 <div id="toolUI">
     <label>
@@ -196,63 +233,133 @@ const dl = new THREE.DirectionalLight(0xffffff,0.8);
 dl.position.set(100,-100,200);
 scene.add(dl);
 
-// --- Grid ---
-const grid = new THREE.GridHelper(400, 40, 0x444444, 0x222222);
-grid.rotateX(Math.PI / 2); // XY plane
-scene.add(grid);
+// ================= GRID SYSTEM =================
+let gridGroup; // holds grid + center lines + ticks
 
-// --- Line Material ---
 const lineMaterial = new THREE.LineBasicMaterial({ color: 0x888888 });
 
-// --- Center Lines ---
-// Center X
-const pointsX = [
-    new THREE.Vector3(-200, 0, 0.01),
-    new THREE.Vector3(200, 0, 0.01)
-];
-const geometryX = new THREE.BufferGeometry().setFromPoints(pointsX);
-const lineX = new THREE.Line(geometryX, lineMaterial);
-scene.add(lineX);
+function buildGrid() {
+    // --- check if measurements should be shown ---
+    const showLabels = document.getElementById('showLabels').checked;
 
-// Center Y
-const pointsY = [
-    new THREE.Vector3(0, -200, 0.01),
-    new THREE.Vector3(0, 200, 0.01)
-];
-const geometryY = new THREE.BufferGeometry().setFromPoints(pointsY);
-const lineY = new THREE.Line(geometryY, lineMaterial);
-scene.add(lineY);
+    // --- remove old labels and grid ---
+    clearGridLabels();
+    if (gridGroup) scene.remove(gridGroup);
+    gridGroup = new THREE.Group();
 
-// --- Tick Marks ---
-const tickLength = 2;
-const tickSpacing = 10; // distance between ticks
+    const size = Number(document.getElementById('gridSize').value);
+    const divisions = Number(document.getElementById('gridDivs').value);
+    const half = size / 2;
+    const spacing = size / divisions;
 
-function addXTicks() {
-    for (let x = -200; x <= 200; x += tickSpacing) {
-        if (x === 0) continue; // skip center
-        const tickGeo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(x, -tickLength / 2, 0.01),
-            new THREE.Vector3(x, tickLength / 2, 0.01)
-        ]);
-        scene.add(new THREE.Line(tickGeo, lineMaterial));
+    // --- Grid ---
+    const grid = new THREE.GridHelper(size, divisions, 0x444444, 0x222222);
+    grid.rotateX(Math.PI / 2);
+    gridGroup.add(grid);
+
+    if (showLabels) {
+        const step = Number(document.getElementById('labelStep').value) || 10;
+        const stepIndex = Math.max(1, Math.round(step / spacing));
+        const labelOffset = 0;
+
+        // X labels along Y=0
+        for (let i = 0; i <= divisions; i++) {
+            if (i % stepIndex !== 0) continue;
+            const x = -half + i * spacing;
+            if (Math.abs(x) < 0.0001) continue; // skip origin
+            makeTextSprite(x.toFixed(0), new THREE.Vector3(x, labelOffset, -0.02));
+        }
+
+        // Y labels along X=0
+        for (let i = 0; i <= divisions; i++) {
+            if (i % stepIndex !== 0) continue;
+            const y = -half + i * spacing;
+            if (Math.abs(y) < 0.0001) continue; // skip origin
+            makeTextSprite(y.toFixed(0), new THREE.Vector3(labelOffset, y, -0.02));
+        }
+
+        // Origin
+        makeTextSprite('0', new THREE.Vector3(0,0,0));
     }
+
+    // --- Center lines ---
+    gridGroup.add(makeLine(new THREE.Vector3(-half, 0, 0.01), new THREE.Vector3(half, 0, 0.01)));
+    gridGroup.add(makeLine(new THREE.Vector3(0, -half, 0.01), new THREE.Vector3(0, half, 0.01)));
+
+    // --- Tick marks ---
+    const tickLength = 2;
+    for (let i = 0; i <= divisions; i++) {
+        const pos = -half + i * spacing;
+        if (Math.abs(pos) < 0.0001) continue;
+        gridGroup.add(makeLine(new THREE.Vector3(pos, -tickLength / 2, 0.01), new THREE.Vector3(pos, tickLength / 2, 0.01)));
+        gridGroup.add(makeLine(new THREE.Vector3(-tickLength / 2, pos, 0.01), new THREE.Vector3(tickLength / 2, pos, 0.01)));
+    }
+
+    scene.add(gridGroup);
+}
+document.getElementById('showLabels').addEventListener('change', buildGrid);
+
+
+
+
+// --- Helper for lines ---
+function makeLine(a, b) {
+    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+    return new THREE.Line(geo, lineMaterial);
 }
 
-function addYTicks() {
-    for (let y = -200; y <= 200; y += tickSpacing) {
-        if (y === 0) continue; // skip center
-        const tickGeo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(-tickLength / 2, y, 0.01),
-            new THREE.Vector3(tickLength / 2, y, 0.01)
-        ]);
-        scene.add(new THREE.Line(tickGeo, lineMaterial));
-    }
+
+
+//====================================================
+let gridLabels = [];
+
+
+function clearGridLabels() {
+    gridLabels.forEach(l => scene.remove(l));
+    gridLabels = [];
 }
 
-addXTicks();
-addYTicks();
+function makeTextSprite(text, position) {
+    const canvas = document.createElement('canvas');
+    const size = 256;
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
 
+    ctx.clearRect(0,0,size,size);
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, size/2, size/2);
 
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+
+    const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(20, 20, 1);
+    sprite.position.copy(position);
+
+    scene.add(sprite);
+    gridLabels.push(sprite);
+}
+//====================================================
+//let step = 40; // default value
+
+const stepInput = document.getElementById('labelStep');
+
+// Update step when user changes input
+stepInput.addEventListener('input', (e) => {
+    step = parseInt(e.target.value);
+    updateGridLabels(); // optional: call function to refresh labels
+});
+
+// Example function to use step
+function updateGridLabels() {
+    console.log(`New label step is ${step} mm`);
+	buildGrid(); // rebuild grid + labels with the new step
+    // redraw your grid labels here
+}
 
 // ================= CAMERA CONTROLS =================
 const target = new THREE.Vector3();
@@ -781,6 +888,12 @@ function applyZOffsetLive() {
 
 // attach live update
 zOffsetInput.addEventListener('input', applyZOffsetLive);
+window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('gridSize').addEventListener('input', buildGrid);
+    document.getElementById('gridDivs').addEventListener('input', buildGrid);
+	document.getElementById('labelStep').addEventListener('input', buildGrid);
+    buildGrid();
+});
 
 
 // ================= INIT =================
