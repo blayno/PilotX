@@ -34,7 +34,7 @@ canvas { flex: 1; background: #000; }
     font-size: 15px;
     font-weight: 600;
     position: absolute;
-    top: 70px;
+    top: 60px;
     right: 10px;
 
     display: flex;
@@ -45,11 +45,21 @@ canvas { flex: 1; background: #000; }
 
     height: 20px;          /* sensible toolbar height */
     min-height: 20px;
+	flex-wrap: wrap;
+	justify-content: flex-end;   /* ← add this */
 }
 
-
-
 .toolbar button { padding: 8px 12px; font-size: 15px; cursor: pointer; }
+
+.progressRow {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+}
+
 
 /* STATUS BAR */
 #statusBar {
@@ -98,7 +108,7 @@ canvas { flex: 1; background: #000; }
 
 
 <div class="toolbar">
-	<label>Z Offset: <input type="number" id="zOffset" value="0" step="1.0"></label>
+	
     <button onclick="startStream()">Play</button>
     <button onclick="pauseStream()">Pause</button>
     <button onclick="resetSim()">Reset</button>
@@ -106,6 +116,18 @@ canvas { flex: 1; background: #000; }
 	<label>Speed: <span id="speedVal">100</span></label>
     <input type="range" id="speedSlider" min="10" max="1000" value="100">
     <input type="file" id="fileInput" accept=".gcode,.nc,.txt,.tap" hidden>
+    <!-- NEW ROW -->
+    <div class="progressRow">
+        <label>Progress</label>
+        <input
+            type="range"
+            id="progressSlider"
+            min="0"
+            max="1000"
+            value="0"
+            style="width:750px">
+    </div>
+
 </div>
 
 <!-- STATUS BAR -->
@@ -131,26 +153,22 @@ canvas { flex: 1; background: #000; }
     <!-- Grid settings -->
     <div class="gridOptions">
         <label>Grid Size
-            <input id="gridSize" type="number" value="400" min="10" step="10">
-        </label>
+        <input id="gridSize" type="number" value="400" min="10" step="10">
         <label>Grid Divisions
-            <input id="gridDivs" type="number" value="40" min="1" step="1">
-        </label>
-<label for="labelStep">Label step (mm): 
-<input type="number" id="labelStep" value="10" min="10" step="10">
-</label>
-
-<label>
-    Show Measurements:
-    <input type="checkbox" id="showLabels" checked>
-</label>
-
-
-    </div>
-</div>
-
-
-
+        <input id="gridDivs" type="number" value="40" min="1" step="1">
+		<label for="labelStep">Label step (mm): 
+		<input type="number" id="labelStep" value="10" min="10" step="10">		
+		<label>
+		<label>Z Offset: <input type="number" id="zOffset" value="0" step="1.0"></label>
+		Show Measurements:
+		<input type="checkbox" id="showLabels" checked>
+		 </label>
+		 
+		
+		
+		
+			</div>
+		</div>
 
 
 <div id="toolUI">
@@ -233,6 +251,8 @@ const dl = new THREE.DirectionalLight(0xffffff,0.8);
 dl.position.set(100,-100,200);
 scene.add(dl);
 
+
+
 // ================= GRID SYSTEM =================
 let gridGroup; // holds grid + center lines + ticks
 
@@ -267,7 +287,7 @@ function buildGrid() {
             if (i % stepIndex !== 0) continue;
             const x = -half + i * spacing;
             if (Math.abs(x) < 0.0001) continue; // skip origin
-            makeTextSprite(x.toFixed(0), new THREE.Vector3(x, labelOffset, -0.02));
+            makeTextSprite(x.toFixed(0), new THREE.Vector3(x, labelOffset, 0.02));
         }
 
         // Y labels along X=0
@@ -275,7 +295,7 @@ function buildGrid() {
             if (i % stepIndex !== 0) continue;
             const y = -half + i * spacing;
             if (Math.abs(y) < 0.0001) continue; // skip origin
-            makeTextSprite(y.toFixed(0), new THREE.Vector3(labelOffset, y, -0.02));
+            makeTextSprite(y.toFixed(0), new THREE.Vector3(labelOffset, y, 0.02));
         }
 
         // Origin
@@ -624,9 +644,14 @@ function parseGcode(text, minMove = 0.01, maxStep = 1.0) {
 
 
 // ================= STREAMING SIM =================
+// ================= STREAMING SIM =================
 let idx = 0, t = 0, running = false;
 let feed = 100;
 let batchedSegments = [];
+
+const progressSlider = document.getElementById('progressSlider');
+let scrubbing = false;
+
 
 function buildTodoPath() {
     batchedSegments = [];
@@ -690,17 +715,22 @@ function highlightLine(line) {
 
 
 function resetSim() {
-    idx = 0; t = 0; running = false;
+    idx = 0;
+    t = 0;
+    running = false;
+
     tool.position.set(0, 0, 0);
 
-    // Re-parse G-code to apply Z-offset
     parseGcode(gcode.value);
     buildTodoPath();
+
+    progressSlider.value = 0;
 
     statusText.textContent = 'Reset';
     lineText.textContent = 'Line: –';
     posText.textContent = 'X:0 Y:0 Z:0';
 }
+
 
 
 function startStream() {
@@ -718,7 +748,67 @@ function pauseStream() {
 speedSlider.addEventListener('input', () => {
     feed = parseFloat(speedSlider.value);
     speedVal.textContent = feed;
+	const progressSlider = document.getElementById('progressSlider');
+	let scrubbing = false;
 });
+
+//============== Progress slider event listeners==================
+
+	progressSlider.addEventListener('input', () => {
+    scrubbing = true;
+    running = false; // pause while scrubbing
+
+    const norm = progressSlider.value / progressSlider.max;
+    setProgress(norm);
+
+    statusText.textContent = 'Scrubbing';
+});
+
+progressSlider.addEventListener('change', () => {
+    scrubbing = false;
+    statusText.textContent = 'Paused';
+});
+
+//==============Progress slider function==========================
+function setProgress(norm) {
+    // clamp 0..1
+    norm = Math.max(0, Math.min(1, norm));
+
+    // total batches
+    const totalBatches = batchedSegments.length;
+    if (!totalBatches) return;
+
+    // find batch
+    const batchFloat = norm * totalBatches;
+    idx = Math.min(Math.floor(batchFloat), totalBatches - 1);
+
+    const batch = batchedSegments[idx];
+    const segCount = batch.points.length - 1;
+
+    // local t inside batch
+    t = batchFloat - idx;
+    t = Math.max(0, Math.min(0.9999, t));
+
+    // interpolate tool position
+    const segIdx = Math.min(Math.floor(t * segCount), segCount - 1);
+    const segT = t * segCount - segIdx;
+
+    const a = batch.points[segIdx];
+    const b = batch.points[segIdx + 1];
+
+    tool.position.lerpVectors(a, b, segT);
+
+    // UI updates
+    const line = batch.lines[segIdx];
+    lineText.textContent = `Line: ${line + 1}`;
+    highlightLine(line);
+
+    posText.textContent =
+        `X:${tool.position.x.toFixed(2)} ` +
+        `Y:${tool.position.y.toFixed(2)} ` +
+        `Z:${tool.position.z.toFixed(2)}`;
+}
+
 
 // ================= AXIS HELPER =================
 //const axesHelper = new THREE.AxesHelper(117); // length in world units
@@ -795,12 +885,19 @@ function animate(tn) {
 
         const segIdx = Math.min(Math.floor(t * total), total - 1);
         const segT = t * total - segIdx;
-
+		
         const a = batch.points[segIdx];
         const b = batch.points[segIdx + 1];
 
         const dist = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) || 1;
         t += dt * feed / dist / total;
+		
+		if (!scrubbing && batchedSegments.length) {
+			const progress =
+				(idx + t) / batchedSegments.length;
+			progressSlider.value =
+				progress * progressSlider.max;
+		}
 
         tool.position.lerpVectors(a, b, segT);
         posText.textContent =
@@ -894,6 +991,8 @@ window.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('labelStep').addEventListener('input', buildGrid);
     buildGrid();
 });
+
+
 
 
 // ================= INIT =================
